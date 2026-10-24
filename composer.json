@@ -10,12 +10,6 @@
             "Molkky\\Tests\\": "test/"
         }
     },
-    "authors": [
-        {
-            "name": "",
-            "email": ""
-        }
-    ],
     "require-dev": {
         "phpunit/phpunit": "^13.4"
     }
