@@ -7,12 +7,6 @@ namespace Molkky;
 class Team
 {
     private int $score = 0;
-    private Molkky $molkky;
-
-    public function __construct()
-    {
-        $this->molkky = new Molkky();
-    }
 
     /**
      * 現在の得点を取得する
@@ -24,11 +18,9 @@ class Team
 
     /**
      * 投擲を行い、倒れたピンに応じてスコアを加算する
-     *
-     * @param int[] $pins 倒れたピンの番号一覧
      */
-    public function throws(array $pins): void
+    public function throws(ThrowResult $result): void
     {
-        $this->score += $this->molkky->calculateScore($pins);
+        $this->score += $result->getScore();
     }
 }

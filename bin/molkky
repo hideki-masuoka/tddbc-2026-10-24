@@ -5,7 +5,9 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use Molkky\Skittle;
 use Molkky\Team;
+use Molkky\ThrowResult;
 use Symfony\Component\Tui\Event\SubmitEvent;
 use Symfony\Component\Tui\Tui;
 use Symfony\Component\Tui\Widget\ContainerWidget;
@@ -65,8 +67,11 @@ $inputWidget->onSubmit(function (SubmitEvent $event) use ($team, $tui, $statusWi
     }
 
     try {
+        $skittlesObjects = array_map(fn (int $num): Skittle => new Skittle($num), $pins);
+        $throwResult = new ThrowResult(...$skittlesObjects);
+
         $prevScore = $team->getScore();
-        $team->throws($pins);
+        $team->throws($throwResult);
         $newScore = $team->getScore();
         $gained = $newScore - $prevScore;
         $throwsCount++;
