@@ -48,4 +48,16 @@ final class TeamTest extends TestCase
         // 12 + 2 + 8 = 22点
         $this->assertSame(22, $team->getScore());
     }
+
+    public function test_チームの得点表から得点の推移を振り返ることができる(): void
+    {
+        $team = new Team();
+        $team->throws(new ThrowResult(new Skittle(12)));
+        $team->throws(new ThrowResult(new Skittle(3), new Skittle(4)));
+
+        $sheet = $team->getScoreSheet();
+        $this->assertSame([12, 14], $sheet->getTransitions());
+        $this->assertSame(12, $sheet->getScoreAt(1));
+        $this->assertSame(14, $sheet->getScoreAt(2));
+    }
 }

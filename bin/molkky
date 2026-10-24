@@ -17,15 +17,14 @@ use Symfony\Component\Tui\Widget\TextWidget;
 $team = new Team();
 $tui = new Tui();
 
-$throwsCount = 0;
-$history = [];
-
 $titleWidget = new TextWidget("=== MÖLKKY TUI GAME ===");
 
 $statusWidget = new TextWidget(
     "【チーム状況】\n" .
     "現在の得点: 0 点\n" .
     "投擲回数  : 0 投\n\n" .
+    "【得点の推移 (ScoreSheet)】\n" .
+    "まだ投擲の記録はありません\n\n" .
     "【スキットル配置】\n" .
     "    [ 7] [ 9] [ 8]\n" .
     "  [ 5][11][12][ 6]\n" .
@@ -34,16 +33,17 @@ $statusWidget = new TextWidget(
 );
 
 $logWidget = new TextWidget(
-    "【投擲履歴】\n" .
-    "(まだ投擲はありません)\n\n" .
-    "倒れたピン番号をカンマ区切りで入力してください (例: 5 または 3, 4)\n" .
-    "未入力のままEnterで0本(ミス) / 'q' で終了"
+    "【コマンド案内】\n" .
+    "・倒れたピン番号を入力して投擲 (例: 5 または 3, 4)\n" .
+    "・未入力のままEnterで0本(ミス)\n" .
+    "・'?<回数>' で過去の時点を振り返る (例: '?1' で第1投時点の得点)\n" .
+    "・'q' または 'exit' で終了"
 );
 
 $inputWidget = new InputWidget();
-$inputWidget->setPrompt("投擲結果 > ");
+$inputWidget->setPrompt("入力 > ");
 
-$inputWidget->onSubmit(function (SubmitEvent $event) use ($team, $tui, $statusWidget, $logWidget, $inputWidget, &$throwsCount, &$history): void {
+$inputWidget->onSubmit(function (SubmitEvent $event) use ($team, $tui, $statusWidget, $logWidget, $inputWidget): void {
     $trimmed = trim($event->getValue());
 
     if ($trimmed === 'q' || $trimmed === 'exit') {
@@ -51,6 +51,33 @@ $inputWidget->onSubmit(function (SubmitEvent $event) use ($team, $tui, $statusWi
         return;
     }
 
+    $sheet = $team->getScoreSheet();
+
+    // 振り返り機能: '?1' や '?2' のような入力形式
+    if (str_starts_with($trimmed, '?')) {
+        $turnStr = trim(substr($trimmed, 1));
+        if (!ctype_digit($turnStr)) {
+            $logWidget->setText("【エラー】振り返る投擲回数を正しく指定してください (例: ?1, ?2)");
+            $inputWidget->setValue('');
+            $tui->requestRender();
+            return;
+        }
+
+        $turn = (int) $turnStr;
+        try {
+            $scoreAtTurn = $sheet->getScoreAt($turn);
+            $logWidget->setText("【振り返り結果】\n第 {$turn} 投時点の累計得点は 【 {$scoreAtTurn} 点 】 でした。");
+        } catch (\OutOfBoundsException $e) {
+            $totalThrows = count($sheet->getTransitions());
+            $logWidget->setText("【振り返りエラー】第 {$turn} 投の記録はありません。（現在の総投擲回数: {$totalThrows} 投）");
+        }
+
+        $inputWidget->setValue('');
+        $tui->requestRender();
+        return;
+    }
+
+    // 投擲の入力処理
     $pins = [];
     if ($trimmed !== '') {
         $rawParts = explode(',', $trimmed);
@@ -74,16 +101,21 @@ $inputWidget->onSubmit(function (SubmitEvent $event) use ($team, $tui, $statusWi
         $team->throws($throwResult);
         $newScore = $team->getScore();
         $gained = $newScore - $prevScore;
-        $throwsCount++;
 
+        $transitions = $sheet->getTransitions();
+        $totalThrows = count($transitions);
         $pinsText = empty($pins) ? 'ミス(0本)' : '[' . implode(', ', $pins) . ']';
-        $history[] = "第{$throwsCount}投: {$pinsText} -> +{$gained}点 (計 {$newScore}点)";
 
-        // チーム状態更新
+        // スコア推移テキスト（例: "12点 -> 14点 -> 22点"）
+        $transitionsText = implode('点 -> ', $transitions) . '点';
+
+        // チーム状態 & 得点表（推移）の更新
         $statusWidget->setText(
             "【チーム状況】\n" .
             "現在の得点: {$newScore} 点\n" .
-            "投擲回数  : {$throwsCount} 投\n\n" .
+            "投擲回数  : {$totalThrows} 投\n\n" .
+            "【得点の推移 (ScoreSheet)】\n" .
+            "{$transitionsText}\n\n" .
             "【スキットル配置】\n" .
             "    [ 7] [ 9] [ 8]\n" .
             "  [ 5][11][12][ 6]\n" .
@@ -91,13 +123,11 @@ $inputWidget->onSubmit(function (SubmitEvent $event) use ($team, $tui, $statusWi
             "      [ 1] [ 2]"
         );
 
-        // 履歴更新 (直近5件表示)
-        $recentHistory = array_slice($history, -5);
         $logWidget->setText(
-            "【投擲履歴】\n" .
-            implode("\n", $recentHistory) . "\n\n" .
-            "倒れたピン番号をカンマ区切りで入力してください (例: 5 または 3, 4)\n" .
-            "未入力のままEnterで0本(ミス) / 'q' で終了"
+            "【投擲結果】\n" .
+            "第{$totalThrows}投: {$pinsText} 獲得得点: +{$gained}点\n\n" .
+            "・'?<回数>' で過去の時点を振り返る (例: '?1' で第1投時点の得点)\n" .
+            "・次のピン番号を入力 (未入力Enterでミス / 'q' で終了)"
         );
     } catch (\InvalidArgumentException $e) {
         $logWidget->setText("【入力エラー】" . $e->getMessage());
