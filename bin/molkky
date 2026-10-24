@@ -1,0 +1,114 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use Molkky\Team;
+use Symfony\Component\Tui\Event\SubmitEvent;
+use Symfony\Component\Tui\Tui;
+use Symfony\Component\Tui\Widget\ContainerWidget;
+use Symfony\Component\Tui\Widget\InputWidget;
+use Symfony\Component\Tui\Widget\TextWidget;
+
+$team = new Team();
+$tui = new Tui();
+
+$throwsCount = 0;
+$history = [];
+
+$titleWidget = new TextWidget("=== MÖLKKY TUI GAME ===");
+
+$statusWidget = new TextWidget(
+    "【チーム状況】\n" .
+    "現在の得点: 0 点\n" .
+    "投擲回数  : 0 投\n\n" .
+    "【スキットル配置】\n" .
+    "    [ 7] [ 9] [ 8]\n" .
+    "  [ 5][11][12][ 6]\n" .
+    "    [ 3][10][ 4]\n" .
+    "      [ 1] [ 2]"
+);
+
+$logWidget = new TextWidget(
+    "【投擲履歴】\n" .
+    "(まだ投擲はありません)\n\n" .
+    "倒れたピン番号をカンマ区切りで入力してください (例: 5 または 3, 4)\n" .
+    "未入力のままEnterで0本(ミス) / 'q' で終了"
+);
+
+$inputWidget = new InputWidget();
+$inputWidget->setPrompt("投擲結果 > ");
+
+$inputWidget->onSubmit(function (SubmitEvent $event) use ($team, $tui, $statusWidget, $logWidget, $inputWidget, &$throwsCount, &$history): void {
+    $trimmed = trim($event->getValue());
+
+    if ($trimmed === 'q' || $trimmed === 'exit') {
+        $tui->stop();
+        return;
+    }
+
+    $pins = [];
+    if ($trimmed !== '') {
+        $rawParts = explode(',', $trimmed);
+        foreach ($rawParts as $part) {
+            $p = trim($part);
+            if (!ctype_digit($p)) {
+                $logWidget->setText("【エラー】ピン番号は数値を指定してください: '{$p}'");
+                $inputWidget->setValue('');
+                $tui->requestRender();
+                return;
+            }
+            $pins[] = (int) $p;
+        }
+    }
+
+    try {
+        $prevScore = $team->getScore();
+        $team->throws($pins);
+        $newScore = $team->getScore();
+        $gained = $newScore - $prevScore;
+        $throwsCount++;
+
+        $pinsText = empty($pins) ? 'ミス(0本)' : '[' . implode(', ', $pins) . ']';
+        $history[] = "第{$throwsCount}投: {$pinsText} -> +{$gained}点 (計 {$newScore}点)";
+
+        // チーム状態更新
+        $statusWidget->setText(
+            "【チーム状況】\n" .
+            "現在の得点: {$newScore} 点\n" .
+            "投擲回数  : {$throwsCount} 投\n\n" .
+            "【スキットル配置】\n" .
+            "    [ 7] [ 9] [ 8]\n" .
+            "  [ 5][11][12][ 6]\n" .
+            "    [ 3][10][ 4]\n" .
+            "      [ 1] [ 2]"
+        );
+
+        // 履歴更新 (直近5件表示)
+        $recentHistory = array_slice($history, -5);
+        $logWidget->setText(
+            "【投擲履歴】\n" .
+            implode("\n", $recentHistory) . "\n\n" .
+            "倒れたピン番号をカンマ区切りで入力してください (例: 5 または 3, 4)\n" .
+            "未入力のままEnterで0本(ミス) / 'q' で終了"
+        );
+    } catch (\InvalidArgumentException $e) {
+        $logWidget->setText("【入力エラー】" . $e->getMessage());
+    }
+
+    $inputWidget->setValue('');
+    $tui->requestRender();
+});
+
+$container = new ContainerWidget();
+$container->add($titleWidget);
+$container->add($statusWidget);
+$container->add($logWidget);
+$container->add($inputWidget);
+
+$tui->add($container);
+$tui->setFocus($inputWidget);
+
+$tui->run();

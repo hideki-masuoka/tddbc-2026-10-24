@@ -13,5 +13,8 @@
     "require-dev": {
         "phpunit/phpunit": "^13.4",
         "phpstan/phpstan": "^2.3"
+    },
+    "require": {
+        "symfony/tui": "^8.1"
     }
 }
